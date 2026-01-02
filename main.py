@@ -6,28 +6,25 @@ import models, schemas, auth, utils
 from deps import get_db, get_current_user
 from database import engine
 
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # deployed frontend URL
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-models.Base.metadata.create_all(bind=engine)
+# ===== CREATE APP =====
 app = FastAPI(title="OnePortal Full Backend")
 
+# ===== CORS =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",               # local frontend
+        "https://your-frontend.netlify.app"   # deployed frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ===== Department Routing =====
+# ===== DATABASE =====
+models.Base.metadata.create_all(bind=engine)
+
+# ===== DEPARTMENT LOGIC =====
 DEPARTMENT_MAP = {
     "life insurance": "Life Insurance",
     "claims": "Claims",
@@ -171,3 +168,4 @@ def get_activity_logs(user=Depends(get_current_user), db: Session = Depends(get_
     else:
         logs = db.query(models.ActivityLog).all()
     return logs
+
