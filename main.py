@@ -2,30 +2,34 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
-
 import models, schemas, auth, utils
 from deps import get_db, get_current_user
 from database import engine
 
-# ====================== CREATE APP ======================
+# ==========================
+# CREATE APP
+# ==========================
 app = FastAPI(title="OnePortal Backend")
 
-# ====================== CORS ===========================
+# ==========================
+# CORS MIDDLEWARE
+# ==========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",          # dev frontend
-        "https://oneportal.onrender.com", # deployed frontend
-    ],
+    allow_origins=["*"],  # Replace "*" with ["https://your-frontend.onrender.com"] when deployed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ====================== DATABASE =======================
+# ==========================
+# DATABASE INIT
+# ==========================
 models.Base.metadata.create_all(bind=engine)
 
-# ====================== DEPARTMENT LOGIC ==============
+# ==========================
+# DEPARTMENT ASSIGNMENT
+# ==========================
 DEPARTMENT_MAP = {
     "life insurance": "Life Insurance",
     "claims": "Claims",
@@ -40,38 +44,54 @@ def assign_department(title: str, description: str) -> str:
             return dept
     return DEPARTMENT_MAP["general"]
 
-# ====================== SIGNUP =========================
+# ==========================
+# SIGNUP
+# ==========================
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == user.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="User already exists")
+    try:
+        existing = db.query(models.User).filter(models.User.email == user.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="User already exists")
 
-    new_user = models.User(
-        name=user.name,
-        email=user.email,
-        password=auth.hash_password(user.password),
-        role=user.role,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+        new_user = models.User(
+            name=user.name,
+            email=user.email,
+            password=auth.hash_password(user.password),
+            role=user.role
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
 
-    utils.send_email(new_user.email, "Verify your account", "Click this link to verify!")
-    utils.log_action(db, new_user.id, "User signed up")
-    return {"message": "User created, verification email sent"}
+        utils.send_email(new_user.email, "Verify your account", "Click this link to verify!")
+        utils.log_action(db, new_user.id, "User signed up")
 
-# ====================== LOGIN ==========================
+        return {"message": "User created, verification email sent"}
+
+    except Exception as e:
+        print("SIGNUP ERROR:", e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+# ==========================
+# LOGIN
+# ==========================
 @app.post("/login")
 def login(data: schemas.UserLogin, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == data.email).first()
-    if not user or not auth.verify_password(data.password, user.password):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
-    token = auth.create_token({"id": user.id, "role": user.role})
-    utils.log_action(db, user.id, "User logged in")
-    return {"token": token, "role": user.role}
+    try:
+        user = db.query(models.User).filter(models.User.email == data.email).first()
+        if not user or not auth.verify_password(data.password, user.password):
+            raise HTTPException(status_code=400, detail="Invalid credentials")
+        token = auth.create_token({"id": user.id, "role": user.role})
+        utils.log_action(db, user.id, "User logged in")
+        return {"token": token, "role": user.role}
+    except Exception as e:
+        print("LOGIN ERROR:", e)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-# ====================== ADMIN ROUTES ===================
+# ==========================
+# ADMIN ROUTES
+# ==========================
 @app.get("/admin/users", response_model=List[schemas.UserResponse])
 def admin_view_users(page: int = 1, limit: int = 10, search: str = "", user=Depends(get_current_user), db: Session = Depends(get_db)):
     if user["role"] != "admin":
@@ -128,7 +148,9 @@ def admin_view_requests(department: str = None, user=Depends(get_current_user), 
         query = query.filter(models.Request.department == department)
     return query.all()
 
-# ====================== CUSTOMER ROUTES ================
+# ==========================
+# CUSTOMER ROUTES
+# ==========================
 @app.put("/customer/profile", response_model=schemas.UserResponse)
 def customer_update_profile(update: schemas.UserUpdate, user=Depends(get_current_user), db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.id == user["id"]).first()
@@ -161,7 +183,9 @@ def list_requests(user=Depends(get_current_user), db: Session = Depends(get_db))
     requests = db.query(models.Request).filter(models.Request.user_id == user["id"]).all()
     return requests
 
-# ====================== ACTIVITY LOGS ===================
+# ==========================
+# ACTIVITY LOGS
+# ==========================
 @app.get("/activity_logs", response_model=List[schemas.ActivityLogResponse])
 def get_activity_logs(user=Depends(get_current_user), db: Session = Depends(get_db)):
     if user["role"] != "admin":
@@ -169,3 +193,4 @@ def get_activity_logs(user=Depends(get_current_user), db: Session = Depends(get_
     else:
         logs = db.query(models.ActivityLog).all()
     return logs
+
