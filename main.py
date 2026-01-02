@@ -6,6 +6,16 @@ import models, schemas, auth, utils
 from deps import get_db, get_current_user
 from database import engine
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # deployed frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="OnePortal Full Backend")
 
