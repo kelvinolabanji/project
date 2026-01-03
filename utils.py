@@ -1,8 +1,9 @@
-def log_action(db, user_id: int, action: str):
-    from models import ActivityLog
-    log = ActivityLog(user_id=user_id, action=action)
-    db.add(log)
-    db.commit()
+from passlib.context import CryptContext
 
-def send_email(to_email: str, subject: str, content: str):
-    print(f"Email to {to_email} - Subject: {subject}\n{content}")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
